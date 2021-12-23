@@ -1,8 +1,6 @@
 import gym
 import torch
-import numpy as np
 from ppo_agent import Agent
-from utils import plot_learning_curve
 
 if __name__ == '__main__':
     env = gym.make('CartPole-v0')
