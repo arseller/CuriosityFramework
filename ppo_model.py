@@ -1,68 +1,118 @@
 import os
 
-import torch as T
+import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
+
+import numpy as np
+
 from torch.distributions.categorical import Categorical
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, n_actions, input_dims, alpha,
-                 fc1_dims=256, fc2_dims=256, chkpt_dir='./models', game=None):
+    def __init__(self, n_actions, input_dims, alpha, chkpt_dir='./models', game=None, device=torch.device('cpu')):
         super(ActorNetwork, self).__init__()
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'actor_{}.pt'.format(game))
-        self.actor = nn.Sequential(
-            nn.Linear(*input_dims, fc1_dims),
-            nn.ReLU(),
-            nn.Linear(fc1_dims, fc2_dims),
-            nn.ReLU(),
-            nn.Linear(fc2_dims, n_actions),
-            nn.Softmax(dim=-1)
-        )
+
+        self.conv1 = nn.Conv2d(in_channels=input_dims[0], out_channels=32, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+
+        conv_shape = self.calc_conv_shape(input_dims)
+
+        self.gru = nn.GRUCell(conv_shape, 256)
+        self.pi = nn.Linear(256, n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
-    def forward(self, state):
-        dist = self.actor(state)
-        dist = Categorical(dist)
+    def forward(self, state, h_a):
 
-        return dist
+        x1 = F.relu(self.conv1(state))
+        x2 = F.relu(self.conv2(x1))
+        x3 = F.relu(self.conv3(x2))
+        x4 = F.relu(self.conv4(x3))
+
+        x_flat = x4.view((x4.size()[0], -1))
+        rec = self.gru(x_flat, h_a.view((-1, 256)))
+
+        pi = self.pi(rec)
+
+        probs = torch.softmax(pi, dim=1)
+        dist = Categorical(probs)
+
+        return dist, h_a
 
     def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
+        torch.save(self.state_dict(), self.checkpoint_file)
 
     def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file))
+
+    def calc_conv_shape(self, input_dim):
+        tmp = torch.zeros(1, *input_dim)
+        dim = self.conv1(tmp)
+        dim = self.conv2(dim)
+        dim = self.conv3(dim)
+        dim = self.conv4(dim)
+        return int(np.prod(dim.size()))
+
+    def init_hidden(self, h_dim=256):
+        h = torch.zeros((1, 1, h_dim), dtype=torch.float32).to(self.device)
+        return h
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, input_dims, alpha, fc1_dims=256, fc2_dims=256,
-                 chkpt_dir='./models', game=None):
+    def __init__(self, input_dims, alpha, chkpt_dir='./models', game=None, device=torch.device('cpu')):
         super(CriticNetwork, self).__init__()
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'critic_{}.pt'.format(game))
-        self.critic = nn.Sequential(
-            nn.Linear(*input_dims, fc1_dims),
-            nn.ReLU(),
-            nn.Linear(fc1_dims, fc2_dims),
-            nn.ReLU(),
-            nn.Linear(fc2_dims, 1)
-        )
+
+        self.conv1 = nn.Conv2d(in_channels=input_dims[0], out_channels=32, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)
+
+        conv_shape = self.calc_conv_shape(input_dims)
+
+        self.gru = nn.GRUCell(conv_shape, 256)
+        self.v = nn.Linear(256, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
-    def forward(self, state):
-        value = self.critic(state)
+    def forward(self, state, h_c):
+        x1 = F.relu(self.conv1(state))
+        x2 = F.relu(self.conv2(x1))
+        x3 = F.relu(self.conv3(x2))
+        x4 = F.relu(self.conv4(x3))
 
-        return value
+        x_flat = x4.view((x4.size()[0], -1))
+        rec = self.gru(x_flat, h_c.view((-1, 256)))
+
+        value = self.v(rec)
+
+        return value, h_c
 
     def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
+        torch.save(self.state_dict(), self.checkpoint_file)
 
     def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file))
+
+    def calc_conv_shape(self, input_dim):
+        tmp = torch.zeros(1, *input_dim)
+        dim = self.conv1(tmp)
+        dim = self.conv2(dim)
+        dim = self.conv3(dim)
+        dim = self.conv4(dim)
+        return int(np.prod(dim.size()))
+
+    def init_hidden(self, h_dim=256):
+        h = torch.zeros((1, 1, h_dim), dtype=torch.float32).to(self.device)
+        return h

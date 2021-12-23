@@ -10,6 +10,8 @@ class Remind:
         self.actions = []
         self.rewards = []
         self.dones = []
+        self.h_a = []
+        self.h_c = []
 
         self.batch_size = batch_size
 
@@ -26,15 +28,19 @@ class Remind:
                np.array(self.vals), \
                np.array(self.rewards), \
                np.array(self.dones), \
+               np.array(self.h_a), \
+               np.array(self.h_c), \
                batches
 
-    def store_memory(self, state, action, probs, vals, reward, done):
+    def store_memory(self, state, action, probs, vals, reward, done, h_a, h_c):
         self.states.append(state)
         self.actions.append(action)
         self.probs.append(probs)
         self.vals.append(vals)
         self.rewards.append(reward)
         self.dones.append(done)
+        self.h_a.append(h_a)
+        self.h_c.append(h_c)
 
     def clear_memory(self):
         self.states = []
@@ -43,3 +49,5 @@ class Remind:
         self.rewards = []
         self.dones = []
         self.vals = []
+        self.h_a = []
+        self.h_c = []
