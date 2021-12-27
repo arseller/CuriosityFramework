@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:/Users/leona/OneDrive/Desktop/CuriosityFramework/main.py", line 52, in <module>
+    wandb.watch(agent)
+  File "C:\Users\leona\anaconda3\envs\cudaenv\lib\site-packages\wandb\sdk\wandb_watch.py", line 74, in watch
+    + str(type(model))
+ValueError: Expected a pytorch model (torch.nn.Module). Received <class 'ppo_agent.Agent'>

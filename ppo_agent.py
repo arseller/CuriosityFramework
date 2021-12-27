@@ -1,6 +1,7 @@
-import numpy as np
+import wandb
 
 import torch
+import numpy as np
 
 from remind import Remind
 from ppo_model import ActorNetwork, CriticNetwork
@@ -8,11 +9,15 @@ from ppo_model import ActorNetwork, CriticNetwork
 
 class Agent:
     def __init__(self, n_actions, input_dims, gamma=0.99, alpha=0.0003, gae_lambda=0.95,
-                 policy_clip=0.2, batch_size=64, n_epochs=10, game=None, device=torch.device('cpu')):
+                 policy_clip=0.2, batch_size=64, n_epochs=10, c_critic=0.5, c_entropy=0.5,
+                 game=None, device=torch.device('cpu'), WANDB=False):
         self.gamma = gamma
         self.policy_clip = policy_clip
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
+        self.c_critic = c_critic
+        self.c_entropy = c_entropy
+        self.wandb = WANDB
 
         self.actor = ActorNetwork(n_actions, input_dims, alpha, game=game, device=device)
         self.critic = CriticNetwork(input_dims, alpha, game=game, device=device)
@@ -85,17 +90,44 @@ class Agent:
                 weighted_probs = advantage[batch] * prob_ratio
                 weighted_clipped_probs = torch.clamp(prob_ratio, 1 - self.policy_clip,
                                                      1 + self.policy_clip) * advantage[batch]
-                actor_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
+                policy_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
 
                 returns = advantage[batch] + values[batch]
                 critic_loss = (returns - critic_value) ** 2
                 critic_loss = critic_loss.mean()
 
-                total_loss = actor_loss + 0.5 * critic_loss
+                entropy_loss = (-new_probs * torch.exp(new_probs)).sum()
+
+                total_loss = policy_loss + 0.5 * critic_loss - 0.01 * entropy_loss
+
                 self.actor.optimizer.zero_grad()
                 self.critic.optimizer.zero_grad()
                 total_loss.backward()
                 self.actor.optimizer.step()
                 self.critic.optimizer.step()
 
+        if self.wandb:
+            grad_norm_actor = self.get_grad(self.actor.named_parameters())
+            grad_norm_critic = self.get_grad(self.critic.named_parameters())
+            wandb.log({
+                'Losses and Gradients/Policy Loss': policy_loss,
+                'Losses and Gradients/Critic Loss': critic_loss,
+                'Losses and Gradients/Entropy Loss': entropy_loss,
+                'Losses and Gradients/Overall Loss': total_loss,
+                'Losses and Gradients/Grad Norm Policy': grad_norm_actor,
+                'Losses and Gradients/Grad Norm Critic': grad_norm_critic
+            })
+
         self.memory.clear_memory()
+
+    @staticmethod
+    def get_grad(params):
+        grad_norm = 0.0
+        for name1, net1 in params:
+            if net1.grad is None:
+                print("Gradients None -> Name: ", name1)
+            else:
+                grad_norm += net1.grad.pow(2).sum()
+        grad_norm = grad_norm ** (1 / 2)
+
+        return grad_norm

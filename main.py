@@ -1,4 +1,5 @@
-import gym
+import wandb
+
 import torch
 import numpy as np
 
@@ -10,9 +11,10 @@ if __name__ == '__main__':
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    game = 'BreakoutNoFrameskip-v4'
-    env = make_env(game)
+    game = 'SpaceInvadersNoFrameskip-v4'
+    env = make_env(env_name=game, shape=(42, 42, 1), repeat=4)
     train_mode = True
+    WANDB = True
 
     print()
     print('Device: {}'.format(device))
@@ -21,15 +23,16 @@ if __name__ == '__main__':
     print('Number of actions: {}'.format(env.action_space.n))
     print()
 
-    N = 20
-    batch_size = 5
-    n_epochs = 4
+    N = 200
+    batch_size = 50
+    n_epochs = 5
     alpha = 0.0003
     agent = Agent(n_actions=env.action_space.n, batch_size=batch_size,
                   alpha=alpha, n_epochs=n_epochs,
                   input_dims=env.observation_space.shape,
                   game=game,
-                  device=device)
+                  device=device,
+                  WANDB=WANDB)
 
     figure_file = 'plots/{}.png'.format(game)
 
@@ -41,6 +44,13 @@ if __name__ == '__main__':
     learn_iters = 0
     avg_score = 0
     n_steps = 0
+
+    settings = {}  # TODO
+
+    if WANDB and train_mode:
+        wandb.init(project='curiosity-learning', name=game, config=settings)
+        wandb.watch(agent.actor)
+        wandb.watch(agent.critic)
 
     if train_mode:
         while n_steps < max_steps:
@@ -71,8 +81,16 @@ if __name__ == '__main__':
 
             print('time_steps', n_steps, 'score %.1f' % score, 'avg score %.1f' % avg_score,
                   'learning_steps', learn_iters)
+
+            if WANDB:
+                wandb.log({
+                    'Scores/Reward': score,
+                    'Scores/AVG Reward': avg_score
+                })
+
         x = [i+1 for i in range(len(score_history))]
         plot_learning_curve(x, score_history, figure_file)
+
     else:
         agent.actor.load_state_dict(torch.load('./models/actor_{}.pt'.format(game)))
         agent.critic.load_state_dict(torch.load('./models/critic_{}.pt'.format(game)))

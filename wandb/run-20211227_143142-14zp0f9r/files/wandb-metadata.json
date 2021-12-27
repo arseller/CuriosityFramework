@@ -1,0 +1,18 @@
+{
+    "os": "Windows-10-10.0.19041-SP0",
+    "python": "3.7.3",
+    "heartbeatAt": "2021-12-27T13:31:45.483603",
+    "startedAt": "2021-12-27T13:31:42.931713",
+    "docker": null,
+    "gpu": "GeForce MX230",
+    "gpu_count": 1,
+    "cpu_count": 8,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "C:/Users/leona/OneDrive/Desktop/CuriosityFramework/main.py",
+    "codePath": "main.py",
+    "host": "LAPTOP-R196KOH7",
+    "username": "leona",
+    "executable": "C:\\Users\\leona\\anaconda3\\envs\\cudaenv\\python.exe"
+}
