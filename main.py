@@ -9,8 +9,20 @@ if __name__ == '__main__':
 
     game = 'CartPole-v1'
     env = gym.make(game)
-    train_mode = not True
+    train_mode = False
 
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    if device == torch.device('cpu'):
+        print('if')
+        print(device)
+        device_name = 'none'
+    else:
+        print('else')
+        print(device)
+        device_name = torch.cuda.get_device_name(0)
+
+    print('Device: {}'.format(device))
+    print('Device name: {}'.format(device_name))
     print('Env: {}'.format(game))
     print('Observation space: {}'.format(env.observation_space))
     print('Number of actions: {}'.format(env.action_space.n))
@@ -62,8 +74,8 @@ if __name__ == '__main__':
         x = [i+1 for i in range(len(score_history))]
         plot_learning_curve(x, score_history, figure_file)
     else:
-        agent.actor.load_state_dict(torch.load('./models/actor_{}.pt'.format(game)))
-        agent.critic.load_state_dict(torch.load('./models/critic_{}.pt'.format(game)))
+        agent.actor.load_state_dict(torch.load('./models/actor_{}.pt'.format(game), map_location=device))
+        agent.critic.load_state_dict(torch.load('./models/critic_{}.pt'.format(game), map_location=device))
 
         for i in range(n_games):
             state = env.reset()
